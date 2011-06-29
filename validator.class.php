@@ -1,10 +1,10 @@
 <?php
 #######################################################
 ##
-##      Projekt:   X-ARF
+##      Projekt:   X-ARF-Validator/Parser
 ##      Datei:     validator.class.php
-##      Version:   1.0
-##      Datum:     15.05.2010
+##      Version:   1.1
+##      Datum:     29.06.2011
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
@@ -12,8 +12,8 @@
 
 $config['counter']      = '100';
 $config['server']       = 'localhost';
-$config['username']     = 'username@blocklist.de';
-$config['password']     = 'passwort';
+$config['username']     = 'validation-x-arf@blocklist.de';
+$config['password']     = '';
 $config['conntyp']      = 'imap';
 $config['port']         = '993';
 $config['extras']       = 'ssl/novalidate-cert';
@@ -21,7 +21,8 @@ $config['ordner']       = 'INBOX';
 $config['cache']        = './cache/';                           # Pfad zum Caching-Ordner mit / am ENDE!
 $config['cachetimeout'] = 10800;                                # Anzahl der sekunden, wie alt die gecachten Schemas werden duerfen
 $config['movebox']      = '.geparst';                           # Name des Ordners, wenn die reports nach dem parsen verschoben weden sollen
-$config['afterparse']   = '0 || move || delete || delete_all'; # Ob die Nachrichten nach dem Parsen "0 -> nichts", "move -> verschieben", "delete -> einzeln geloescht" oder "delete_all -> alle Nachrichten im Postfach loeschen" werden sollen....
+$config['afterparse']   = 0;
+#$config['afterparse']   = '0 || move || delete || delete_all'; # Ob die Nachrichten nach dem Parsen "verschoben -> move", "delete -> einzeln geloescht" oder "delete_all -> alle Nachrichten im Postfach loeschen" werden sollen....
 
 
 
@@ -39,7 +40,7 @@ $config['afterparse']   = '0 || move || delete || delete_all'; # Ob die Nachrich
 
 class parsexarf
   {
-    
+
     function __construct($config)
       {
         $this->config = $config;
@@ -129,18 +130,18 @@ class parsexarf
             $body      = imap_fetchbody($this->connection, $mails[$i]->msgno, 1);
             $logs      = imap_fetchbody($this->connection, $mails[$i]->msgno, 3);
             $this->mail[$i] = array(
-                                    'header'   => $header, 
-                                    'body'     => $body,
-                                    'report'   => $report,
-                                    'logs'     => $logs,
-                                    'structur' => $struct,
-                                    'all'      => $mails[$i]
-                                   );
+                                'header'   => $header,
+                                'body'     => $body,
+                                'report'   => $report,
+                                'logs'     => $logs,
+                                'structur' => $struct,
+                                'all'      => $mails[$i]
+                           );
             if($this->config['afterparse'] == 'delete')
               {
                 imap_delete($this->connection, '"'.$mails[$i]->msgno.'"');
               }
-            else if($this->config['afterparse'] == 'move')
+            elseif($this->config['afterparse'] == 'move')
               {
                 imap_mail_move($this->connection, $mails[$i]->msgno, $config['ordner'].'.'.$this->config['movebox']);
               }
@@ -168,8 +169,9 @@ class parsexarf
     public function checkstructur($arf, $mail)
       {
         $error  = 0;
-        if(preg_match('/X-ARF:.yes/iUm', strtolower($mail['header'])) !== 0)
+        if(preg_match('/^x-arf: yes/im', strtolower($mail['header'])) == 1)
           {
+
             # All (Haupt-Teil) = Attachment parts[0]
             if(!is_array($mail['structur']->parameters))
               {
@@ -207,24 +209,24 @@ class parsexarf
               }
 
 
- 
-          # Yaml-Report = Attachment parts[1]
-          if(!is_array($mail['structur']->parts[1]->parameters))
-            {
+
+            # Yaml-Report = Attachment parts[1]
+            if(!is_array($mail['structur']->parts[1]->parameters))
+              {
                 $error++;
                 $errormsg[] = 'Report enthaelt keine charset und name';
-            }
-          else
-            {
-              foreach($mail['structur']->parts[1]->parameters as $key => $value)
-                {
-                  $parameter[strtolower($value->attribute)] = $value->value;
-                }
-              if(($parameter['charset'] != 'utf8') && ($parameter['charset'] != 'utf-8'))
-                {
-                  $error++;
-                  $errormsg[] = 'Charset vom Report ist nicht utf8 || utf-8';
-                }
+              }
+            else
+              {
+                foreach($mail['structur']->parts[1]->parameters as $key => $value)
+                  {
+                    $parameter[strtolower($value->attribute)] = $value->value;
+                  }
+                if(($parameter['charset'] != 'utf8') && ($parameter['charset'] != 'utf-8'))
+                  {
+                    $error++;
+                    $errormsg[] = 'Charset vom Report ist nicht utf8 || utf-8';
+                  }
                 if(($parameter['name'] != 'report.txt') && ($parameter['name'] != 'report.yaml')  && ($parameter['name'] != 'report.yml'))
                   {
                     $error++;
@@ -276,10 +278,10 @@ class parsexarf
                     $error++;
                     $errormsg[] = 'Report faengt nicht mit "---" an';
                   }
-                else if(($i >= 1) && (!empty($lines[$i])))
+                elseif(($i >= 1) && (!empty($lines[$i])))
                   {
                     $params = explode(':', $lines[$i], 2);
-                    $parameter[strtolower($params[0])] = trim($params[1]);
+                    $parameter[strtolower($params[0])] = str_replace('@', '-a#t-', trim($params[1]));
                   }
               }
           }
@@ -292,6 +294,7 @@ class parsexarf
         else
           {
             $schema = $this->getschema($parameter['schema-url'], $this->config['cachetimeout']);
+            $parameter['schema-url'] = '<a href="'.$parameter['schema-url'].'" target="_blank">'.$parameter['schema-url'].'</a>';
             if(empty($schema))
               {
                 $error++;
@@ -299,36 +302,25 @@ class parsexarf
               }
             else
               {
-                #
+                    #
                 # Anstatt auch bei Fehlern $return[$key] mit Inhalt zu belegen, welcher nicht korrekt ist,
                 # kann man diesen auch leer lassen oder formatieren....
                 #
 
                 $phpschema = json_decode($schema);
-                if(!is_object($phpschema))
-                  {
-                    $error++;
-                    $errormsg[] = 'Das Schema scheint korrektes JSON zu sein!';
-                  }
                 foreach($phpschema->properties as $key => $value)
                   {
                     $key = strtolower($key);
                     if(!isset($value->optional))
                       {
                         $schem[$key] = $value;
-
-                      #
-                      # Die einzelnen doppelten Zuweisungen sind noch drin, weil dort frueher die Keys und Values farbig gemacht wurden
-                      # Das kann man aber ruhig auf nur die Fehler beschraenken
-                      #
-
                         if(!isset($parameter[$key]))
                           {
                             $error++;
                             $errormsg[] = 'Pflichtfeld: "'.$key.'" nicht im Report enthalten.';
                             $return[$key] = $parameter[$key];
                           }
-                        else if((isset($value->enum)) && (!in_array($parameter[$key], $value->enum)))
+                        elseif((isset($value->enum)) && (!in_array($parameter[$key], $value->enum)))
                           {
                             $error++;
                             $errormsg[] = 'Im Schema bei "'.$key.'" gibt es den Wert "'.$parameter[$key].'" nicht.';
@@ -338,56 +330,20 @@ class parsexarf
                           {
                             if(!isset($value->format))
                               {
-                                 $format = $value->type;
+                                $format = $value->type;
                               }
-                            else if(isset($value->format))
+                            elseif(isset($value->format))
                               {
                                 $format = $value->type.' ('.$value->format.')';
-                                if($value->format == 'date-time')
-                                  {
-                                    if(strlen(strtotime($parameter[$key])) == 0)
-                                      {
-                                        $error++;
-                                        $errormsg[] = 'Fuer "'.$key.'" ist "'.$parameter[$key].'" kein gueltiges Format/Zeit.';
-                                        $return[$key] = '<span style="color: red">'.$parameter[$key].'</span>';
-                                      }
-                                  }
                               }
                             $return[$key] = $parameter[$key];
                           }
                       }
                     else
                       {
-                        #
-                        # Pruefen von OPTINALEN Feldern...
-                        #
-                        if((isset($value->enum)) && (!in_array($parameter[$key], $value->enum)) && (!empty($parameter[$key])))
-                          {
-                            $error++;
-                            $errormsg[] = 'Im Schema bei "'.$key.'" gibt es den Wert "'.$parameter[$key].'" nicht.';
-                            $return[$key] = $parameter[$key];
-                          }
-                        else
-                          {
-                            if(!isset($value->format))
-                              {
-                                 $format = $value->type;
-                              }
-                            else if(isset($value->format))
-                              {
-                                $format = $value->type.' ('.$value->format.')';
-                                if($value->format == 'date-time')
-                                  {
-                                    if(strlen(strtotime($parameter[$key])) == 0)
-                                      {
-                                        $error++;
-                                        $errormsg[] = 'Fuer "'.$key.'" ist "'.$parameter[$key].'" kein gueltiges Format/Zeit.';
-                                        $return[$key] = '<span style="color: red">'.$parameter[$key].'</span>';
-                                      }
-                                  }
-                              }
-                            $return[$key] = $parameter[$key];
-                          }
+                            #
+                            # check optional fields
+                            #
                       }
                   }
               }
@@ -398,11 +354,13 @@ class parsexarf
         return($error);
       }
 
+                         
+
     /**
       * @name: getschema
       * holt das JSON-Schema via curl und legt es im Cache-Ordner ab.
       *
-      * @param $url, $cach (1, 0, groeßer als 10...)
+      * @param $url, $cach (1,0)
       * @return Boolean
     */
     private function getschema($url, $cache=0)
@@ -415,7 +373,7 @@ class parsexarf
           }
         if(empty($url))
           {
-            $this->setfehler('URL zum JSON-Schema ist leer');
+        #       $this->setfehler('URL zum JSON-Schema ist leer');
             return(0);
           }
         else
@@ -423,11 +381,11 @@ class parsexarf
             $url = str_replace('https://', '', str_replace('http://', '', trim($url)));
           }
         $curl = str_replace('/', '_', str_replace('\\', '_', $url));
-        if($cache <= 10)
+        if($cache != 1)
           {
             $get = 1;
           }
-        else if((isset($cache)) && (($cache == 1) || ($cache >= 10)))
+        elseif((isset($cache)) && ($cache == 1))
           {
             $get = 0;
             if((!file_exists($this->config['cache'].$curl)) || (filesize($this->config['cache'].$curl) <= 10))
@@ -443,9 +401,9 @@ class parsexarf
                     $get = 1;
                   }
               }
-            }
+          }
 
-        $user_agent = "X-ARF-VALIDATOR --- Mozilla/5.0 (compatible; MSIE 9.4; Windows NT 6.1)";
+        $user_agent = "blocklist.de X-ARF-VALIDATOR --- Mozilla/5.0 (compatible; MSIE 9.4; Windows NT 6.1)";
 
         $ch = curl_init();                            // initialize curl handle
         curl_setopt($ch, CURLOPT_URL, $url);          // set url to post to
@@ -466,7 +424,6 @@ class parsexarf
         if(($document === FALSE) || (empty($document)))
           {
             #$document = curl_error($ch);
-            # Wenn Fehler, dann muss $document leer sein!
           }
         else
           {
@@ -503,9 +460,12 @@ class parsexarf
     */
     public function geterrormsg()
       {
+        foreach($this->errormsg as $key => $value)
+          {
+            $this->errormsg[$key] = '<span style="color:red">'.$value.'</span>';
+          }
         return($this->errormsg);
       }
-
 
     function __destruct()
       {
