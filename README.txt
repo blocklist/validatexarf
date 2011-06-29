@@ -2,8 +2,8 @@
 ##
 ##      Projekt:   X-ARF
 ##      Datei:     validator.class.php
-##      Version:   1.0
-##      Datum:     16.05.2010
+##      Version:   1.1
+##      Datum:     29.06.2011
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
