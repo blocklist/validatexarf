@@ -3,8 +3,8 @@
 ##
 ##      Projekt:   X-ARF-Validator/Parser
 ##      Datei:     validator.class.php
-##      Version:   1.1
-##      Datum:     29.06.2011
+##      Version:   1.2
+##      Datum:     27.01.2012
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
@@ -139,7 +139,7 @@ class parsexarf
                            );
             if($this->config['afterparse'] == 'delete')
               {
-                imap_delete($this->connection, '"'.$mails[$i]->msgno.'"');
+                imap_delete($this->connection, $mails[$i]->msgno.':*');
               }
             elseif($this->config['afterparse'] == 'move')
               {
@@ -169,7 +169,7 @@ class parsexarf
     public function checkstructur($arf, $mail)
       {
         $error  = 0;
-        if(preg_match('/^x-arf: yes/im', strtolower($mail['header'])) == 1)
+        if(preg_match('/^x-arf:.yes/im', strtolower($mail['header'])) == 1)
           {
 
             # All (Haupt-Teil) = Attachment parts[0]
@@ -354,7 +354,7 @@ class parsexarf
         return($error);
       }
 
-                         
+
 
     /**
       * @name: getschema
@@ -473,5 +473,3 @@ class parsexarf
         return(1);
       }
   }
-
-?>
