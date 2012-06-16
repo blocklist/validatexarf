@@ -2,8 +2,8 @@
 ##
 ##      Projekt:   X-ARF
 ##      Datei:     validator.class.php
-##      Version:   1.1
-##      Datum:     29.06.2011
+##      Version:   1.2
+##      Datum:     27.01.2012
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
@@ -39,6 +39,5 @@ wenn 0, dann ist es mit dem Schema und anderen Vorgaben korrekt.
 
 Bei Fragen, einfach mailen :-)
 
-root@blocklist.de
-
+support@blocklist.de
 
