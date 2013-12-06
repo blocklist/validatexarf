@@ -3,25 +3,28 @@
 ##
 ##      Projekt:   X-ARF-Validator/Parser
 ##      Datei:     validator.class.php
-##      Version:   1.2
-##      Datum:     27.01.2012
+##      Version:   1.1
+##      Datum:     21.12.2012
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
 #######################################################
 
+@ignore_user_abort(true);
+
 $config['counter']      = '100';
-$config['server']       = 'localhost';
-$config['username']     = 'validation-x-arf@blocklist.de';
-$config['password']     = '';
+$config['server']       = 'imap.example.com';
+$config['username']     = 'validator@example.com';
+$config['password']     = 'xxxx';
 $config['conntyp']      = 'imap';
 $config['port']         = '993';
 $config['extras']       = 'ssl/novalidate-cert';
 $config['ordner']       = 'INBOX';
 $config['cache']        = './cache/';                           # Pfad zum Caching-Ordner mit / am ENDE!
 $config['cachetimeout'] = 10800;                                # Anzahl der sekunden, wie alt die gecachten Schemas werden duerfen
+$config['useragent']    = 'blocklist.de X-ARF-VALIDATOR --- Mozilla/5.0 (compatible; MSIE 9.4; Windows NT 6.1)';   # UserAgent fuer Curl zum Schema laden
 $config['movebox']      = '.geparst';                           # Name des Ordners, wenn die reports nach dem parsen verschoben weden sollen
-$config['afterparse']   = 0;
+$config['afterparse']   = 'delete';
 #$config['afterparse']   = '0 || move || delete || delete_all'; # Ob die Nachrichten nach dem Parsen "verschoben -> move", "delete -> einzeln geloescht" oder "delete_all -> alle Nachrichten im Postfach loeschen" werden sollen....
 
 
@@ -29,7 +32,7 @@ $config['afterparse']   = 0;
 /**
   * @package: X-Arf-Validator
   * @author:  Martin Schiftan
-  * @version: 1.0$
+  * @version: 1.2$
   * @descrip: Hauptclasse zum parsen/validieren der X-ARF-Reports
   * @Classes: parsexarf
   *
@@ -40,7 +43,6 @@ $config['afterparse']   = 0;
 
 class parsexarf
   {
-
     function __construct($config)
       {
         $this->config = $config;
@@ -77,18 +79,19 @@ class parsexarf
         preg_match('/subject: (.*)/im', $xarf, $subject);
         $this->subject = $subject[1];
 
-        $xarf = str_replace("\n", "\r\n", $xarf);
-        $check = imap_check($this->connection);
-        $add = imap_append($this->connection, '{'.$config['server'].':'.$config['port'].'/'.$config['conntyp'].'/'.$config['extras'].'}'.$config['ordner'], stripslashes($xarf));
+        $xarf   = str_replace("\n", "\r\n", $xarf);
+        $check  = imap_check($this->connection);
+        $add    = imap_append($this->connection, '{'.$config['server'].':'.$config['port'].'/'.$config['conntyp'].'/'.$config['extras'].'}'.$config['ordner'], stripslashes($xarf));
         $check1 = imap_check($this->connection);
         if(($check < $check1) && ($add == 1))
           {
-            return(0);
+            $return = 0;
           }
         else
           {
-            return(1);
+            $return = 1;
           }
+        return($return);
       }
 
 
@@ -137,6 +140,7 @@ class parsexarf
                                 'structur' => $struct,
                                 'all'      => $mails[$i]
                            );
+            $this->msgnr = $mails[$i]->msgno;
             if($this->config['afterparse'] == 'delete')
               {
                 imap_delete($this->connection, $mails[$i]->msgno.':*');
@@ -146,7 +150,7 @@ class parsexarf
                 imap_mail_move($this->connection, $mails[$i]->msgno, $config['ordner'].'.'.$this->config['movebox']);
               }
           }
-        if($this->config['afterpase'] == 'delete_all')
+        if($this->config['afterparse'] == 'delete_all')
           {
             imap_delete($this->connection, "*");
           }
@@ -169,9 +173,19 @@ class parsexarf
     public function checkstructur($arf, $mail)
       {
         $error  = 0;
-        if(preg_match('/^x-arf:.yes/im', strtolower($mail['header'])) == 1)
+        $checkxarf = preg_match('/^x-.?arf:.(yes|plain|secure|bulk)/im', strtolower($mail['header']), $typ);
+        if(isset($typ[1]))
           {
-
+            $typs = array('yes', 'plain');
+            if(!in_array(strtolower($typ[1]), $typs))
+              {
+                $checkxarf = 0;
+                $error++;
+                $errormsg[] = 'Sorry, aber ich kann nur Version 0.1 oder Version 0.2 mit Typ PLAIN parsen';
+              }
+          }
+        if($checkxarf == 1)
+          {
             # All (Haupt-Teil) = Attachment parts[0]
             if(!is_array($mail['structur']->parameters))
               {
@@ -239,9 +253,8 @@ class parsexarf
             $error++;
             $errormsg[] = 'Header enthaelt kein X-ARF-Tag, daher wird nicht weiter geprueft.';
           }
-        $this->error = $error;
-        $this->errormsg = $errormsg;
-
+        $this->error    = @$error;
+        $this->errormsg = @$errormsg;
         return($error);
       }
 
@@ -256,7 +269,7 @@ class parsexarf
     public function checkreport($arf, $report)
       {
         $return = array();
-        $error = 0;
+        $error  = 0;
         if(empty($report))
           {
             $error++;
@@ -281,7 +294,7 @@ class parsexarf
                 elseif(($i >= 1) && (!empty($lines[$i])))
                   {
                     $params = explode(':', $lines[$i], 2);
-                    $parameter[strtolower($params[0])] = str_replace('@', '-a#t-', trim($params[1]));
+                    $parameter[strtolower($params[0])] = trim($params[1]);
                   }
               }
           }
@@ -294,7 +307,8 @@ class parsexarf
         else
           {
             $schema = $this->getschema($parameter['schema-url'], $this->config['cachetimeout']);
-            $parameter['schema-url'] = '<a href="'.$parameter['schema-url'].'" target="_blank">'.$parameter['schema-url'].'</a>';
+#            $parameter['schema-url'] = '<a href="'.$parameter['schema-url'].'" target="_blank">'.$parameter['schema-url'].'</a>';
+            $parameter['schema-url'] = $parameter['schema-url'];
             if(empty($schema))
               {
                 $error++;
@@ -302,11 +316,11 @@ class parsexarf
               }
             else
               {
-                    #
+                #
                 # Anstatt auch bei Fehlern $return[$key] mit Inhalt zu belegen, welcher nicht korrekt ist,
                 # kann man diesen auch leer lassen oder formatieren....
                 #
-
+                                $this->getkeys = array();
                 $phpschema = json_decode($schema);
                 foreach($phpschema->properties as $key => $value)
                   {
@@ -318,25 +332,36 @@ class parsexarf
                           {
                             $error++;
                             $errormsg[] = 'Pflichtfeld: "'.$key.'" nicht im Report enthalten.';
-                            $return[$key] = $parameter[$key];
+                            $this->return[$key] = $parameter[$key];
+                                                        array_push($this->getkeys, $key);
                           }
                         elseif((isset($value->enum)) && (!in_array($parameter[$key], $value->enum)))
                           {
                             $error++;
                             $errormsg[] = 'Im Schema bei "'.$key.'" gibt es den Wert "'.$parameter[$key].'" nicht.';
-                            $return[$key] = $parameter[$key];
+                            $this->return[$key] = $parameter[$key];
+                                                        array_push($this->getkeys, $key);
                           }
                         else
                           {
                             if(!isset($value->format))
                               {
-                                $format = $value->type;
+                                $type = $value->type;;
+                                $format = '';
                               }
                             elseif(isset($value->format))
                               {
-                                $format = $value->type.' ('.$value->format.')';
+                                $type   = $value->type;
+                                $format = $value->format;
                               }
-                            $return[$key] = $parameter[$key];
+                            $this->return[$key] = $parameter[$key];
+                            $valid = $this->validateformat($key, $type, $format, $parameter[$key]);
+                            if($valid == 0)
+                              {
+                                $error++;
+                                $errormsg[] = 'Inhalt von "'.$key.'" ist nicht im richtigen Format/Type: '.$format.'/'.$type;
+                                                                array_push($this->getkeys, $key);
+                              }
                           }
                       }
                     else
@@ -348,12 +373,122 @@ class parsexarf
                   }
               }
           }
-        $this->data  = $return;
-        $this->error = $error;
-        $this->errormsg = $errormsg;
+        $this->data  = @$this->return;
+        $this->error = @$error;
+        $this->errormsg = @$errormsg;
         return($error);
       }
 
+
+    /**
+      * @name: validateformat
+      * prueft anhand des Typs oder Format oder Feld, ob der Inhalt richtig ist (Email, Datum, IP, Zahl....)
+      *
+      * @param $key (Feldname), $type (string, number...), $format (date-time, email...), $wert (der Inhalt)
+      * @return Boolean
+    */
+    private function validateformat($key, $type, $format, $wert)
+      {
+        $return = 0;
+        if(($type == 'string') && (empty($format)))
+          {
+            return(1);
+          }
+        if($type == 'integer')
+          {
+            $return = $this->validinteger($wert);
+          }
+        elseif($type == 'number')
+          {
+            $return = $this->validnumber($wert);
+          }
+        elseif($format == 'email')
+          {
+            $return = $this->validemail($wert);
+          }
+        elseif($format == 'date-time')
+          {
+            $return = $this->validdate($wert);
+          }
+        elseif($format == 'uri')
+          {
+            $return = $this->validuri($wert);
+          }
+        if(($key == 'source') && ($this->return['source-type'] == 'ipv4' || 'ipv6' || 'ip-address'))
+          {
+            $return = $this->validip($wert);
+          }
+        return($return);
+      }
+
+
+    /**
+      * @name: valid***
+      * ueberprueft fuer den jeweiligen Typ ob er richtig ist... sprechen fuer sich selbst ;-)
+      *
+      * @param $wert
+      * @return Boolean
+    */
+    private function validinteger($wert)
+      {
+        $return = 0;
+        if(filter_var($wert, FILTER_VALIDATE_INT))
+          {
+            $return = 1;
+          }
+        return($return);
+      }
+
+    private function validnumber($wert)
+      {
+         $return = 0;
+         if(is_float($wert))
+           {
+             $return = 1;
+           }
+        return($return);
+      }
+
+    private function validemail($wert)
+      {
+        $return = 0;
+        if(filter_var($wert, FILTER_VALIDATE_EMAIL))
+          {
+            $return = 1;
+          }
+        return($return);
+      }
+
+    private function validip($wert)
+      {
+        $return = 0;
+        if(filter_var($wert, FILTER_VALIDATE_IP))
+          {
+            $return = 1;
+          }
+        return($return);
+      }
+
+    private function validdate($wert)
+      {
+        $return = 0;
+        $text = preg_match('/(([\w]{2,3}), ([\d]{1,2}) ([\w]{3}) ([\d]{4}) ([\d]{2}:[\d]{2}:[\d]{2}) (\+|\-)([\d]{4}))/im', $wert);
+        if($text == 1)
+          {
+            $return = 1;
+          }
+        return($return);
+      }
+
+    private function validuri($wert)
+      {
+        $return = 0;
+        if(filter_var($wert, FILTER_VALIDATE_URL, FILTER_FLAG_PATH_REQUIRED))
+          {
+            $return = 1;
+          }
+         return($return);
+      }
 
 
     /**
@@ -366,6 +501,7 @@ class parsexarf
     private function getschema($url, $cache=0)
       {
         $get = 0;
+        $url = trim($url);
         if((!isset($cache)) || ($cache == 0))
           {
             $get   = 1;
@@ -373,12 +509,16 @@ class parsexarf
           }
         if(empty($url))
           {
-        #       $this->setfehler('URL zum JSON-Schema ist leer');
+#           $this->setfehler('URL zum JSON-Schema ist leer');
             return(0);
           }
         else
           {
-            $url = str_replace('https://', '', str_replace('http://', '', trim($url)));
+            $port = 80;
+            if(stripos($url, 's://') !== FALSE)
+              {
+                $port = 443;
+              }
           }
         $curl = str_replace('/', '_', str_replace('\\', '_', $url));
         if($cache != 1)
@@ -403,15 +543,13 @@ class parsexarf
               }
           }
 
-        $user_agent = "blocklist.de X-ARF-VALIDATOR --- Mozilla/5.0 (compatible; MSIE 9.4; Windows NT 6.1)";
-
         $ch = curl_init();                            // initialize curl handle
         curl_setopt($ch, CURLOPT_URL, $url);          // set url to post to
         curl_setopt($ch, CURLOPT_FAILONERROR, 1);     // Fail on errors
         curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);   // return into a variable
-        curl_setopt($ch, CURLOPT_PORT, 80);           //Set the port number
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);       // times out after 15s
-        curl_setopt($ch, CURLOPT_USERAGENT, $user_agent);
+        curl_setopt($ch, CURLOPT_PORT, $port);        //Set the port number
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);        // times out after 15s
+        curl_setopt($ch, CURLOPT_USERAGENT, $this->config['useragent']);
 
         if($get == 1)
           {
@@ -450,6 +588,16 @@ class parsexarf
         return($this->error);
       }
 
+    public function getkeysreturn()
+      {
+        if(!isset($this->getkeys))
+          {
+            $this->getkeys = array();
+          }
+        return(@$this->getkeys);
+      }
+
+
 
     /**
       * @name: geterrormsg
@@ -460,8 +608,10 @@ class parsexarf
     */
     public function geterrormsg()
       {
+        # braucht man nur, wenn man die Fehlermeldungen bearbeiten moechte...
         foreach($this->errormsg as $key => $value)
           {
+            # Fehler farbig machen:
             $this->errormsg[$key] = '<span style="color:red">'.$value.'</span>';
           }
         return($this->errormsg);
@@ -469,7 +619,9 @@ class parsexarf
 
     function __destruct()
       {
+        imap_delete($this->connection, $this->msgnr.':*');
         @imap_close($this->connection);
         return(1);
       }
   }
+
