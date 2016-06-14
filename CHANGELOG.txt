@@ -1,0 +1,76 @@
+#######################################################
+##
+##      Projekt:   X-ARF
+##      Datei:     validator.class.php
+##      Version:   1.7
+##      Datum:     21.04.2016
+##      Copyright: Martin Schiftan
+##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
+##
+#######################################################
+
+
+21.04.2016
+Version 1.7
+Added strtotime in validdate() and valid the unixtime with checkdate
+
+
+
+
+28.09.2014
+Version 1.6
+Removed Check if Report does not starts with "---".
+
+
+
+
+13.09.2014
+Version 1.5
+Function validdate() added RegEx for Date "yyy-mm-ddThh:ii:ss.mmC(+-O)"
+$text = preg_match('/^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-2])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T\s]((([01]\d|2[0-3])((:?)[0-5]\d)?|24\:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/i', $wert);
+
+
+
+
+30.04.2014
+Version 1.4
+Some small beauty fixex
+
+
+
+
+07.03.2013
+Version 1.3
+X-ARF-Header-Tag will be check for YES|PLAIN|SECURE|BULK if it not Version 0.1 (yes) or Version 0.2 with PLAIN,
+i will not work :-(
+
+
+
+
+
+20.02.2013
+Version 1.2
+X-ARF-Header-Tag for Version X-ARF-Version 0.2 updated.
+X-arf: plain|yes|secure|bulk
+
+
+
+28.02.2012
+Version 1.2
+Checks for x-Arf-Header updated, is valid too without Space:
+...^x-arf:.yes/im...
+
+
+27.01.2012
+Version 1.2
+Small Bugfix on imap_delete()
+
+
+
+
+
+
+
+If you have Questions, please send an email :-)
+
+root@blocklist.de
