@@ -2,42 +2,42 @@
 ##
 ##      Projekt:   X-ARF
 ##      Datei:     validator.class.php
-##      Version:   1.2
-##      Datum:     27.01.2012
+##      Version:   1.3
+##      Datum:     21.12.2012
 ##      Copyright: Martin Schiftan
 ##      license:   http://opensource.org/licenses/gpl-license.php GNU Public License
 ##
 #######################################################
 
 
-1. example.php oeffnen und anschauen ;-)
-2. Einstellung in der validator.class.php anpassen oder in eine eigene config auslagern.
-3. ausfuehren.
+1. open the example.php and look ;-)
+2. Config in the validator.class.php configure or add it in a own file
+3. run.
 
 
-Allgemein braucht man nur folgende Daten:
+Generally you only need the following data:
 
-Postfach, Passwort, Server-Verbindungsdaten,
-Was mit geparsten Mails geschehen soll,
-Was mit richtigen und fehlerhaften Reports geschehen soll.
+Mailbox, Password, Server-Connection,
+What do with the parsed Mails,
+What do with the right and wrong reports.
 
 
-Dann kann man mit:
+Then you can with:
 
 $xarf         = new parsexarf($config);
 $mails        = $xarf->getmails();
-die Mails holen und dann mit:
+open the Mailbox and then:
 > if($imap->checkstructur('x-arf', $value) == 0)
-die Struktur ueberpruefen
-($value enthaelt nen array mit dem Header, Body, Report, Logs)
+check the structur
+($value is an array with the Header, Body, Yaml-Report and Logs)
 
-dann weiter mit:
+then go away with:
 > if($imap->checkreport('x-arf', $value['report']) == 0)
-wenn 0, dann ist es mit dem Schema und anderen Vorgaben korrekt.
+if 0, then the Value is right the Data from the Schema
 
 
 
-Bei Fragen, einfach mailen :-)
+If you have Questions, please ask us :-)
 
-support@blocklist.de
+root@blocklist.de
 
